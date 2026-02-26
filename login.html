@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>iFilter | Login</title>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; margin: 0; min-height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            background: radial-gradient(at 0% 0%, #0f172a 0, transparent 50%), #020617;
+            color: white;
+        }
+        .login-card {
+            background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1); padding: 3rem;
+            border-radius: 24px; width: 350px; text-align: center;
+        }
+        input {
+            width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;
+        }
+        button {
+            width: 100%; padding: 12px; border-radius: 8px; border: none;
+            background: #2563eb; color: white; font-weight: bold; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h2>iFilter with AI</h2>
+        <p>Sign in to start analyzing</p>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="handleLogin()">Login</button>
+    </div>
+
+    <script>
+        function handleLogin() {
+            // FOR DEMO PURPOSES: Simple hardcoded check
+            // In a real project, you would use the Cognito SDK here.
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+
+            if(user === "admin" && pass === "aws123") {
+                localStorage.setItem("isLoggedIn", "true");
+                window.location.href = "index.html"; // Go to your main app
+            } else {
+                alert("Invalid Credentials");
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iFilter | AI Image Labeler</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1500.0.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center;
+            background: radial-gradient(at 0% 0%, #0f172a 0, transparent 50%), #020617;
+            color: white; padding: 20px;
+        }
+
+        .card { 
+            background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1); padding: 2rem; border-radius: 24px; 
+            width: 100%; max-width: 800px; text-align: center;
+        }
+
+        h2 { background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.5rem; margin: 10px 0; }
+        
+        /* SIDE BY SIDE PREVIEW BOX */
+        .upload-area { 
+            border: 2px dashed rgba(255, 255, 255, 0.2); border-radius: 16px; padding: 20px; margin: 20px 0;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .preview-grid { 
+            display: flex; /* Makes them side-by-side */
+            gap: 15px; 
+            overflow-x: auto; /* Adds scrollbar if too many photos */
+            padding: 10px;
+            justify-content: center;
+        }
+
+        .preview-item-wrapper { text-align: center; min-width: 120px; }
+
+        .preview-img { 
+            width: 120px; height: 120px; object-fit: cover; 
+            border-radius: 12px; border: 2px solid #38bdf8;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+        }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        
+        button { 
+            flex: 1; padding: 15px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; transition: 0.3s;
+        }
+
+        #analyzeBtn { background: #2563eb; color: white; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4); }
+        #analyzeBtn:disabled { background: #334155; box-shadow: none; cursor: not-allowed; }
+        #clearBtn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); }
+        #clearBtn:hover { background: rgba(244, 63, 94, 0.2); border-color: #f43f5e; }
+
+        /* OUTPUT DESIGN */
+        .results { margin-top: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; text-align: left; }
+        .result-card { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); }
+        .label-tag { background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; padding: 4px 8px; border-radius: 6px; font-size: 11px; margin: 4px; display: inline-block; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>iFilter with AI</h2>
+    <p>Advanced Computer Vision | AWS Rekognition Engine</p>
+    
+    <div class="upload-area">
+        <input type="file" id="imageInput" accept="image/*" multiple>
+        <div id="previewContainer" class="preview-grid"></div>
+    </div>
+
+    <div class="btn-group">
+        <button id="clearBtn">Clear All</button>
+        <button id="analyzeBtn" disabled>Process Assets</button>
+    </div>
+
+    <div id="resultsArea" class="results"></div>
+</div>
+
+<script>
+    // 1. YOUR AWS CONFIG
+    AWS.config.update({
+        accessKeyId: 'AKIA3TYMC72OHWIYHWB7', 
+        secretAccessKey: '+D60m5FFVha1603AROjlXQHBzwnqAu+Dgq0JD+jf',
+        region: 'us-east-1' 
+    });
+
+    const s3 = new AWS.S3();
+    const rekognition = new AWS.Rekognition();
+    const bucketName = 'visionarc-project-2026';
+
+    const input = document.getElementById('imageInput');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const preview = document.getElementById('previewContainer');
+    const resultsArea = document.getElementById('resultsArea');
+
+    input.onchange = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length > 5) { alert("Max 5 photos allowed"); e.target.value = ""; return; }
+        
+        preview.innerHTML = "";
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'preview-item-wrapper';
+                wrapper.innerHTML = `<img src="${ev.target.result}" class="preview-img"><br><small>${file.name}</small>`;
+                preview.appendChild(wrapper);
+            };
+            reader.readAsDataURL(file);
+        });
+        analyzeBtn.disabled = files.length === 0;
+    };
+
+    clearBtn.onclick = () => {
+        input.value = "";
+        preview.innerHTML = "";
+        resultsArea.innerHTML = "";
+        analyzeBtn.disabled = true;
+    };
+
+    analyzeBtn.onclick = async () => {
+        analyzeBtn.innerText = "Analyzing Neural Data...";
+        analyzeBtn.disabled = true;
+        resultsArea.innerHTML = "";
+
+        for (const file of input.files) {
+            try {
+                // Upload to S3
+                const upload = await s3.upload({
+                    Bucket: bucketName,
+                    Key: `uploads/${Date.now()}_${file.name}`,
+                    Body: file
+                }).promise();
+
+                // Call Rekognition
+                const data = await rekognition.detectLabels({
+                    Image: { S3Object: { Bucket: bucketName, Name: upload.Key } },
+                    MaxLabels: 5,
+                    MinConfidence: 75
+                }).promise();
+
+                // UI Display - Cards side by side
+                const resCard = document.createElement('div');
+                resCard.className = 'result-card';
+                resCard.innerHTML = `<strong>${file.name}</strong><br>`;
+                data.Labels.forEach(l => {
+                    resCard.innerHTML += `<span class="label-tag">${l.Name} (${Math.round(l.Confidence)}%)</span>`;
+                });
+                resultsArea.appendChild(resCard);
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        analyzeBtn.innerText = "Processing Complete";
+    };
+</script>
+</body>
+</html>
